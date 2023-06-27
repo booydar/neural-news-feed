@@ -39,11 +39,11 @@ client.start()
 async def dump_all_messages(channel):
 	"""Записывает json-файл с информацией о всех сообщениях канала/чата"""
 	offset_msg = 0    # номер записи, с которой начинается считывание
-	limit_msg = 100   # максимальное число записей, передаваемых за один раз
+	limit_msg = 10   # максимальное число записей, передаваемых за один раз
 
 	all_messages = []   # список всех сообщений
 	total_messages = 0
-	total_count_limit = 100  # поменяйте это значение, если вам нужны не все сообщения
+	total_count_limit = 10  # поменяйте это значение, если вам нужны не все сообщения
 
 	class DateTimeEncoder(json.JSONEncoder):
 		'''Класс для сериализации записи дат в JSON'''
@@ -65,19 +65,34 @@ async def dump_all_messages(channel):
 			break
 		messages = history.messages
 		for message in messages:
-			all_messages.append(message.to_dict())
+			message_dict = message.to_dict()
+			if getattr(message, 'media', None):
+				print("Got media:", message.media)
+				if getattr(message.media, 'photo', None):
+					print("Got media photo:", message.media.photo)
+					output = await client.download_media(
+						message.media,
+						file=f"media/{channel.title.replace(' ', '_')}",
+					)
+					message_dict['media_path'] = output
+			all_messages.append(message_dict)
 		offset_msg = messages[len(messages) - 1].id
 		total_messages = len(all_messages)
 		if total_count_limit != 0 and total_messages >= total_count_limit:
 			break
 
-	with open('channel_messages.json', 'w', encoding='utf8') as outfile:
+	for message in all_messages:
+		if hasattr(message, 'media') and hasattr(message.media.photo):
+			photo_id = message.media.photo.id
+
+	with open(f"messages/{channel.title.replace(' ', '_')}.json", 'w', encoding='utf8') as outfile:
 		 json.dump(all_messages, outfile, ensure_ascii=False, cls=DateTimeEncoder)
 
 
 async def main():
 	url = input("Введите ссылку на канал или чат: ")
 	channel = await client.get_entity(url)
+	print("channel", channel)
 	# await dump_all_participants(channel)
 	await dump_all_messages(channel)
 
