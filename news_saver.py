@@ -39,11 +39,11 @@ client.start()
 async def dump_all_messages(channel):
 	"""Записывает json-файл с информацией о всех сообщениях канала/чата"""
 	offset_msg = 0    # номер записи, с которой начинается считывание
-	limit_msg = 10   # максимальное число записей, передаваемых за один раз
+	limit_msg = 100   # максимальное число записей, передаваемых за один раз
 
 	all_messages = []   # список всех сообщений
 	total_messages = 0
-	total_count_limit = 10  # поменяйте это значение, если вам нужны не все сообщения
+	total_count_limit = 10_000  # поменяйте это значение, если вам нужны не все сообщения
 
 	class DateTimeEncoder(json.JSONEncoder):
 		'''Класс для сериализации записи дат в JSON'''
@@ -67,12 +67,12 @@ async def dump_all_messages(channel):
 		for message in messages:
 			message_dict = message.to_dict()
 			if getattr(message, 'media', None):
-				print("Got media:", message.media)
+				# print("Got media:", message.media)
 				if getattr(message.media, 'photo', None):
-					print("Got media photo:", message.media.photo)
+					# print("Got media photo:", message.media.photo)
 					output = await client.download_media(
 						message.media,
-						file=f"media/{channel.title.replace(' ', '_')}",
+						file=f"media/{channel.title.replace(' ', '_')}/{channel.title.replace(' ', '_')}",
 					)
 					message_dict['media_path'] = output
 			all_messages.append(message_dict)
