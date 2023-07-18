@@ -1,3 +1,4 @@
+import os
 import configparser
 import json
 
@@ -36,6 +37,15 @@ client = TelegramClient(username, api_id, api_hash)
 
 client.start()
 
+
+async def get_channel_names(channel):
+	names = []
+	async for dialog in client.iter_dialogs():
+		if dialog.is_channel:
+			names.append(dialog.name)
+
+	print(names)
+
 async def dump_all_messages(channel):
 	"""Записывает json-файл с информацией о всех сообщениях канала/чата"""
 	offset_msg = 0    # номер записи, с которой начинается считывание
@@ -43,7 +53,7 @@ async def dump_all_messages(channel):
 
 	all_messages = []   # список всех сообщений
 	total_messages = 0
-	total_count_limit = 10_000  # поменяйте это значение, если вам нужны не все сообщения
+	total_count_limit = 1_000  # поменяйте это значение, если вам нужны не все сообщения
 
 	class DateTimeEncoder(json.JSONEncoder):
 		'''Класс для сериализации записи дат в JSON'''
@@ -85,16 +95,37 @@ async def dump_all_messages(channel):
 		if hasattr(message, 'media') and hasattr(message.media.photo):
 			photo_id = message.media.photo.id
 
+	if not os.path.exists('messages'):
+		os.system('mkdir messages')
+
 	with open(f"messages/{channel.title.replace(' ', '_')}.json", 'w', encoding='utf8') as outfile:
 		 json.dump(all_messages, outfile, ensure_ascii=False, cls=DateTimeEncoder)
 
 
 async def main():
-	url = input("Введите ссылку на канал или чат: ")
-	channel = await client.get_entity(url)
-	print("channel", channel)
-	# await dump_all_participants(channel)
-	await dump_all_messages(channel)
+	# # get all channels
+	# await get_channel_names(channel)
+
+	# # dump one channel
+	# url = input("Введите ссылку на канал или чат: ")
+	# channel = await client.get_entity(url)
+	# print("channel", channel)
+	# await dump_all_messages(channel)
+
+	# dump all channels
+	with open('channel_names.txt', 'r') as f:
+		names = f.read().split('\n')
+
+	async for dialog in client.iter_dialogs():
+		if dialog.is_channel and (dialog.name in set(names)):
+			print(dialog.name)
+			await dump_all_messages(dialog)
+
+	# print('\n\n\n\n')
+	# print(dialog.message)
+	# print('\n\n\n\n')
+	# print(dialog.message.message)
+	# await dump_all_messages(dialog)
 
 
 with client:
