@@ -1,106 +1,86 @@
 import os
-import re
-import json
-import numpy as np
-import telebot
+import pandas as pd
+import asyncio
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
-# from neural import Model
+from telebot.async_telebot import AsyncTeleBot
 
-class NewsBot(telebot.TeleBot):
+import configparser
+from telethon.sync import TelegramClient
+
+MESSAGES_PATH = "/home/booydar/Desktop/_projects/tg_notebot/neural-news-feed/data/all_messages.csv"
+RATINGS_PATH = "/home/booydar/Desktop/_projects/tg_notebot/neural-news-feed/data/ratings.csv"
+
+config = configparser.ConfigParser()
+config.read("config.ini")
+api_id   = config['Telegram']['api_id']
+api_hash = config['Telegram']['api_hash']
+username = config['Telegram']['username']
+# class NewsBot(telebot.TeleBot):
+class NewsBot(AsyncTeleBot):
     def __init__(self, api_token):
         super().__init__(api_token)
-        self.next_channel()
-        
-
-    def get_news(self):
-        if not self.messages:
-            self.next_channel()
+        self.load_messages()
+    
+    def load_messages(self):
+        messages = pd.read_csv(MESSAGES_PATH)
+        if os.path.exists(RATINGS_PATH):
+            ratings = pd.read_csv(RATINGS_PATH)
+            messages_ids = messages.id.astype(str) + '-' + messages.channel_id.astype(str)
+            rated_ids = ratings.id.astype(str) + '-' + ratings.channel_id.astype(str)
+            self.messages = messages[~messages_ids.isin(rated_ids.unique())].sort_values('date', ascending=False)
+            self.ratings = ratings
             
-        message, self.messages = self.messages[0], self.messages[1:]
+        self.messages = messages
+        self.ratings = pd.DataFrame()
 
-        news = {'message': message['message']}
-        if 'media_path' in message:
-            impath = os.path.join('/home/booydar/Desktop/projects/tg_notebot/news_bot/', message['media_path'])
-            news['media_path'] = impath
-
-        if not news['message'] and not news.get('media_path'):
-            return self.get_news()
-
-        return news
-
-    def load_news(self, channel):
-        messages_path = os.path.join('/home/booydar/Desktop/projects/tg_notebot/news_bot/messages/', channel)
-        with open(messages_path, 'r') as f:
-            self.messages = json.load(f)
-        np.random.shuffle(self.messages)
-
-    def next_channel(self):
-        self.channels = getattr(self, 'channels', [])
-        if not self.channels:
-            self.channels = next(os.walk('/home/booydar/Desktop/projects/tg_notebot/news_bot/messages'))[2]
-            np.random.shuffle(self.channels)
-        else: 
-            self.channels = self.channels[1:]
-        
-        self.channel = self.channels[0]
-        self.load_news(self.channel)
+    def get_message(self):
+        message = self.messages.iloc[:1]
+        return message
+    
+    def set_rating(self, rating, is_advertisement=False):
+        message = self.messages.iloc[:1].copy()
+        message['rating'] = rating
+        message['is_advertisement'] = is_advertisement
+        self.messages = self.messages.iloc[1:]
+        self.ratings = pd.concat((self.ratings, message))
+        self.ratings.to_csv(RATINGS_PATH, index=False)
         
 
-api_token = 'API_TOKEN'
+api_token = '[API_TOKEN]'
+chat_id = int(api_token.split(":")[0])
 bot = NewsBot(api_token)
 
 def rate_markup():
     markup = InlineKeyboardMarkup()
-    markup.row_width = 2
-    markup.add(InlineKeyboardButton("next", callback_data="next"),
-                InlineKeyboardButton("next channel", callback_data="next_channel"))
+    markup.row_width = 4
+    markup.add(InlineKeyboardButton("Ad", callback_data="is_ad"),
+               InlineKeyboardButton("0", callback_data="rate_0"),
+               InlineKeyboardButton("1", callback_data="rate_1"),
+               InlineKeyboardButton("2", callback_data="rate_2"))
     return markup
 
 @bot.message_handler(commands=['start'])
-def start_message(message):    
+async def start_message(message):    
     bot.chat_id = message.chat.id
-    bot.send_message(message.chat.id, 'Hello!', reply_markup=rate_markup())
-
-
+    msg = bot.get_message()
+    async with TelegramClient(username, api_id, api_hash) as client:
+        await client.forward_messages(chat_id, int(msg.id.iloc[0]), int(msg.channel_id.iloc[0]))
+    await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
 
 @bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
-    # bot.chat_id = message.chat.id
-    if call.data == "next":
-        news = bot.get_news()
-        if 'media_path' in news:
-            with open(news['media_path'], 'rb') as img:
-                bot.send_photo(bot.chat_id, img, caption=news['message'], reply_markup=rate_markup())
-        else:
-            bot.send_message(bot.chat_id, news['message'], reply_markup=rate_markup())
-
-    elif call.data == "next_channel":
-        print(bot.channel)
-        bot.next_channel()
-        print(bot.channel)
-
-
-    # elif message.text.startswith('/set_'):
-    #     bot.wait_value = message.text.split('/set_')[1]
-    #     bot.send_message(message.chat.id, f'set {bot.wait_value} to what value?')
-    # elif bot.wait_value:
-    #     if '.' in message.text:
-    #         bot.model.config['generate_config'][bot.wait_value] = float(message.text)
-    #     else:
-    #         bot.model.config['generate_config'][bot.wait_value] = int(message.text)
-    #     bot.wait_value = False
-    # elif message.text.startswith('/reset'):
-    #     bot.send_message(message.chat.id, "Память бота стерта.")
-    #     bot.reset()
-    # elif message.text.startswith('/context'):
-    #     bot.send_message(message.chat.id, bot.get_context())
-    #     bot.reset()
-    # elif message.text.startswith('/config'):
-    #     msg = '; '.join([f'{k}-{v}' for k, v in bot.get_config().items()])
-    #     bot.send_message(message.chat.id, msg)
-    # else:
-    #     answer = bot.answer(message.text)
-    #     bot.send_message(message.chat.id, answer)
+async def callback_query(call):
+    if call.data == "Ad":
+        bot.set_rating(0, True)
+    elif call.data == 'rate_0':
+        bot.set_rating(0, False)
+    elif call.data == 'rate_1':
+        bot.set_rating(1, False)
+    elif call.data == 'rate_2':
+        bot.set_rating(2, False)
+    msg = bot.get_message()
+    async with TelegramClient(username, api_id, api_hash) as client:
+        await client.forward_messages(chat_id, int(msg.id.iloc[0]), int(msg.channel_id.iloc[0]))
+    await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
     
 
-bot.infinity_polling()
+asyncio.run(bot.infinity_polling())
