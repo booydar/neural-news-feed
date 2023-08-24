@@ -17,11 +17,10 @@ client = TelegramClient(username, api_id, api_hash)
 client.start()
 
 async def dump_all_messages(channel, save_path='data/messages.csv'):
-	# """Записывает json-файл с информацией о всех сообщениях канала/чата"""
-	offset_msg = 0    # номер записи, с которой начинается считывание
-	limit_msg = 1000   # максимальное число записей, передаваемых за один раз
+	offset_msg = 0
+	limit_msg = 1000
 
-	all_messages = []   # список всех сообщений
+	all_messages = []
 	newest_id = 0
 	attributes = ['id', 'peer_id', 'date', 'message']
 	full_db = pd.DataFrame(columns=attributes)
@@ -30,10 +29,6 @@ async def dump_all_messages(channel, save_path='data/messages.csv'):
 		channel_id = int(str(channel.id)[4:])
 		if channel_id in full_db.channel_id.values:
 			newest_id = full_db[full_db.channel_id == channel_id]['id'].astype(int).max()
-			print(f'Found messages, last id is {newest_id}')
-	# else:
-	# 	os.system(f"mkdir {save_path}")
-
 
 	while True:
 		history = await client(GetHistoryRequest(
@@ -54,18 +49,13 @@ async def dump_all_messages(channel, save_path='data/messages.csv'):
 			all_messages.append(results)
 
 		offset_msg = messages[-1].id
-		print(len(all_messages))
-		
-		# if len(all_messages) >= 10000:
-		# 	break
-
 	
 	if len(all_messages) == 0:
 		return 
 	print(f'Loaded {len(all_messages)} messages')
 	
 	save_cols = ['id', 'channel_id', 'date', 'message']
-	res_df = pd.DataFrame(all_messages)#, columns=save_cols)	
+	res_df = pd.DataFrame(all_messages)
 	res_df.date = res_df.date.apply(pd.to_datetime)
 	res_df['id'] = res_df['id'].astype(int)
 	res_df['channel_id'] = res_df.peer_id.apply(lambda x: x['channel_id']).astype(int)
@@ -81,7 +71,6 @@ async def main():
 		if dialog.is_channel and (dialog.name in set(names)):
 			print(f"Loading messages from {dialog.name}")
 			name = re.sub('[^a-zA-zа-яА-Я]', '_', dialog.name)
-			# save_path = os.path.join('./data/messages', f"{name}.csv")
 			save_path = './data/all_messages.csv'
 			await dump_all_messages(dialog, save_path)
 
