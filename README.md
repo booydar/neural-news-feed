@@ -7,7 +7,7 @@
 
 
 ### Usage
-Add channel names to ```channel_names.txt``` telegram bot token to ```bot.py``` and telegram client credentials to ```config.ini```
+Add channel names to ```channel_names.txt``` telegram bot token and telegram client credentials to ```config.ini```
 
 ```
 pip install -r requirements.txt

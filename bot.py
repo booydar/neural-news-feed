@@ -17,6 +17,7 @@ config.read("config.ini")
 api_id   = config['Telegram']['api_id']
 api_hash = config['Telegram']['api_hash']
 username = config['Telegram']['username']
+api_token = config['Telegram']['bot_token']
 
 class NewsBot(AsyncTeleBot):
     def __init__(self, api_token):
@@ -61,7 +62,6 @@ class NewsBot(AsyncTeleBot):
         self.timer.start()
         
 
-api_token = '[API_TOKEN]'
 chat_id = int(api_token.split(":")[0])
 bot = NewsBot(api_token)
 
