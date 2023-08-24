@@ -1,27 +1,31 @@
 import os
 import pandas as pd
 import asyncio
+from threading import Timer
+
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 from telebot.async_telebot import AsyncTeleBot
 
 import configparser
 from telethon.sync import TelegramClient
 
-MESSAGES_PATH = "/home/booydar/Desktop/_projects/tg_notebot/neural-news-feed/data/all_messages.csv"
-RATINGS_PATH = "/home/booydar/Desktop/_projects/tg_notebot/neural-news-feed/data/ratings.csv"
+MESSAGES_PATH = "./data/all_messages.csv"
+RATINGS_PATH = "./data/ratings.csv"
 
 config = configparser.ConfigParser()
 config.read("config.ini")
 api_id   = config['Telegram']['api_id']
 api_hash = config['Telegram']['api_hash']
 username = config['Telegram']['username']
-# class NewsBot(telebot.TeleBot):
+
 class NewsBot(AsyncTeleBot):
     def __init__(self, api_token):
         super().__init__(api_token)
         self.load_messages()
+        self.start_timer()
     
     def load_messages(self):
+        os.system("python load_all_messages.py")
         messages = pd.read_csv(MESSAGES_PATH)
         if os.path.exists(RATINGS_PATH):
             ratings = pd.read_csv(RATINGS_PATH)
@@ -29,6 +33,8 @@ class NewsBot(AsyncTeleBot):
             rated_ids = ratings.id.astype(str) + '-' + ratings.channel_id.astype(str)
             self.messages = messages[~messages_ids.isin(rated_ids.unique())].sort_values('date', ascending=False)
             self.ratings = ratings
+            print(f"Found {messages.shape[0]} total messages and {self.ratings.shape[0]} ratings")
+            return
             
         self.messages = messages
         self.ratings = pd.DataFrame()
@@ -44,6 +50,15 @@ class NewsBot(AsyncTeleBot):
         self.messages = self.messages.iloc[1:]
         self.ratings = pd.concat((self.ratings, message))
         self.ratings.to_csv(RATINGS_PATH, index=False)
+
+    def start_timer(self):
+        class RepeatTimer(Timer):
+            def run(self):
+                while not self.finished.wait(self.interval):
+                    self.function(*self.args, **self.kwargs)
+
+        self.timer = RepeatTimer(3600, self.load_messages)
+        self.timer.start()
         
 
 api_token = '[API_TOKEN]'
@@ -69,7 +84,7 @@ async def start_message(message):
 
 @bot.callback_query_handler(func=lambda call: True)
 async def callback_query(call):
-    if call.data == "Ad":
+    if call.data == "is_ad":
         bot.set_rating(0, True)
     elif call.data == 'rate_0':
         bot.set_rating(0, False)
