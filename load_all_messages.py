@@ -1,5 +1,4 @@
 import os
-import re
 import configparser
 import pandas as pd
 
@@ -7,16 +6,16 @@ from telethon.sync import TelegramClient
 from telethon.tl.functions.messages import GetHistoryRequest
 
 config = configparser.ConfigParser()
-config.read("config.ini")
+config.read(os.environ.get('news_config'))
 api_id   = config['Telegram']['api_id']
 api_hash = config['Telegram']['api_hash']
 username = config['Telegram']['username']
-
+save_path = config['Telegram']['save_path']
         
 client = TelegramClient(username, api_id, api_hash)
 client.start()
 
-async def dump_all_messages(channel, save_path='data/messages.csv'):
+async def dump_all_messages(channel, save_path=save_path):
 	offset_msg = 0
 	limit_msg = 1000
 
@@ -70,8 +69,7 @@ async def main():
 	async for dialog in client.iter_dialogs():
 		if dialog.is_channel and (dialog.name in set(names)):
 			print(f"Loading messages from {dialog.name}")
-			name = re.sub('[^a-zA-zа-яА-Я]', '_', dialog.name)
-			save_path = './data/all_messages.csv'
+			messages_path = os.path.join(save_path, 'all_messages.csv')
 			await dump_all_messages(dialog, save_path)
 
 

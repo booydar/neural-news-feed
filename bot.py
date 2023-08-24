@@ -9,15 +9,16 @@ from telebot.async_telebot import AsyncTeleBot
 import configparser
 from telethon.sync import TelegramClient
 
-MESSAGES_PATH = "./data/all_messages.csv"
-RATINGS_PATH = "./data/ratings.csv"
-
 config = configparser.ConfigParser()
-config.read("config.ini")
+config.read(os.environ.get('news_config'))
 api_id   = config['Telegram']['api_id']
 api_hash = config['Telegram']['api_hash']
 username = config['Telegram']['username']
 api_token = config['Telegram']['bot_token']
+save_path = config['Telegram']['save_path']
+
+MESSAGES_PATH = os.path.join(save_path, "all_messages.csv")
+RATINGS_PATH = os.path.join(save_path, "ratings.csv")
 
 class NewsBot(AsyncTeleBot):
     def __init__(self, api_token):
@@ -26,6 +27,7 @@ class NewsBot(AsyncTeleBot):
         self.start_timer()
     
     def load_messages(self):
+        print('loading all messages')
         os.system("python load_all_messages.py")
         messages = pd.read_csv(MESSAGES_PATH)
         if os.path.exists(RATINGS_PATH):

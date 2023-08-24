@@ -10,9 +10,7 @@
 Add channel names to ```channel_names.txt``` telegram bot token and telegram client credentials to ```config.ini```
 
 ```
-pip install -r requirements.txt
+sudo docker build container_name .
 
-mkdir data
-
-python bot.py
+sudo docker run -v /home:/app/home -e news_config="path-to-config.ini" container_name
 ```
