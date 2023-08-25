@@ -27,7 +27,7 @@ class NewsBot(AsyncTeleBot):
         self.start_timer()
     
     def load_messages(self):
-        print('loading all messages')
+        print(f"{pd.Timestamp.now().round('s')}\nLoading all messages")
         os.system("python load_all_messages.py")
         messages = pd.read_csv(MESSAGES_PATH)
         if os.path.exists(RATINGS_PATH):

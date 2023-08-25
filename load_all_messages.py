@@ -63,14 +63,14 @@ async def dump_all_messages(channel, save_path=save_path):
 	full_db.to_csv(save_path, index=False)
 
 async def main():
-	with open('channel_names.txt', 'r') as f:
+	with open(os.path.join(save_path, 'channel_names.txt'), 'r') as f:
 		names = f.read().split('\n')
 
 	async for dialog in client.iter_dialogs():
 		if dialog.is_channel and (dialog.name in set(names)):
 			print(f"Loading messages from {dialog.name}")
 			messages_path = os.path.join(save_path, 'all_messages.csv')
-			await dump_all_messages(dialog, save_path)
+			await dump_all_messages(dialog, messages_path)
 
 
 with client:
