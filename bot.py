@@ -9,6 +9,8 @@ from telebot.async_telebot import AsyncTeleBot
 import configparser
 from telethon.sync import TelegramClient
 
+from load_all_messages import get_channels, add_channel, remove_channel
+
 config = configparser.ConfigParser()
 config.read(os.environ.get('news_config'))
 api_id   = config['Telegram']['api_id']
@@ -25,6 +27,7 @@ class NewsBot(AsyncTeleBot):
         super().__init__(api_token)
         self.load_messages()
         self.start_timer()
+        self.wait = False
     
     def load_messages(self):
         print(f"{pd.Timestamp.now().round('s')}\nLoading all messages")
@@ -98,6 +101,26 @@ async def callback_query(call):
     async with TelegramClient(username, api_id, api_hash) as client:
         await client.forward_messages(chat_id, int(msg.id.iloc[0]), int(msg.channel_id.iloc[0]))
     await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
-    
+
+@bot.message_handler(content_types=["text"])
+async def handle_text(message):
+    bot.chat_id = message.chat.id
+    if message.text.startswith("/get_channels"):
+        channel_names = get_channels()
+        await bot.send_message(bot.chat_id, "\n".join(channel_names))
+    elif message.text.startswith("/add_channel"):
+        bot.wait = 'add'
+        await bot.send_message(bot.chat_id, "What is the channel name/link?")
+    elif message.text.startswith("/remove_channel"):
+        bot.wait = 'remove'
+        await bot.send_message(bot.chat_id, "What is the channel name/link?")
+    elif bot.wait == 'add':
+        bot.wait = False
+        add_channel(message.text)
+        await bot.send_message(bot.chat_id, f"Added {message.text}")
+    elif bot.wait == 'remove':
+        bot.wait = False
+        remove_channel(message.text)
+        await bot.send_message(bot.chat_id, f"Removed {message.text}")
 
 asyncio.run(bot.infinity_polling())

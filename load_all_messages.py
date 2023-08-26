@@ -62,12 +62,31 @@ async def dump_all_messages(channel, save_path=save_path):
 	full_db = pd.concat((full_db, res_df))[save_cols]
 	full_db.to_csv(save_path, index=False)
 
+def get_channels():
+	with open(os.path.join(save_path, 'channel_names.txt'), 'r') as f:
+		names = f.read().split('\n')
+		return names
+	
+def add_channel(name):
+	if 't.me/' in name:
+		name = name.split('t.me/')[-1]
+	with open(os.path.join(save_path, 'channel_names.txt'), 'a') as f:
+		f.write(f"\n{name}")
+
+def remove_channel(name):
+	with open(os.path.join(save_path, 'channel_names.txt'), 'r') as f:
+		names = f.read().split('\n')
+
+	with open(os.path.join(save_path, 'channel_names.txt'), 'r') as f:
+		cleaned_names = [n for n in names if n != name]
+		f.write('\n'.join(cleaned_names))
+
 async def main():
 	with open(os.path.join(save_path, 'channel_names.txt'), 'r') as f:
 		names = f.read().split('\n')
 
 	async for dialog in client.iter_dialogs():
-		if dialog.is_channel and (dialog.name in set(names)):
+		if dialog.is_channel and (dialog.name in set(names) or dialog.entity.username in set(names)):
 			print(f"Loading messages from {dialog.name}")
 			messages_path = os.path.join(save_path, 'all_messages.csv')
 			await dump_all_messages(dialog, messages_path)
@@ -75,9 +94,3 @@ async def main():
 
 with client:
 	client.loop.run_until_complete(main())
-
-    
-
-
-    
-
