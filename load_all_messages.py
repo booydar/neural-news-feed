@@ -1,4 +1,5 @@
 import os
+import json
 import configparser
 import pandas as pd
 
@@ -62,34 +63,82 @@ async def dump_all_messages(channel, save_path=save_path):
 	full_db = pd.concat((full_db, res_df))[save_cols]
 	full_db.to_csv(save_path, index=False)
 
-def get_channels():
-	with open(os.path.join(save_path, 'channel_names.txt'), 'r') as f:
-		names = f.read().split('\n')
-		return names
+class MessageHandler:
+	def __init__(self):
+		self.load()
+
+	def load(self):
+		with open(os.path.join(save_path, 'channels.json'), 'r') as f:
+				self.d = json.load(f)
+				self._d = {v:key for key, value in self.d.items() for v in value}
+		try:
+			with open(os.path.join(save_path, 'channel_id_map.json'), 'r') as f:
+				self.map = json.load(f)
+		except FileNotFoundError:
+			self.map = dict()
+
+
+	def save(self):
+		with open(os.path.join(save_path, 'channels.json'), 'w') as f:
+			json.dump(self.d, f, ensure_ascii=False)
+
+	def get_channels(self):
+		return [c for group in self.d for c in self.d[group]]
 	
-def add_channel(name):
-	if 't.me/' in name:
-		name = name.split('t.me/')[-1]
-	with open(os.path.join(save_path, 'channel_names.txt'), 'a') as f:
-		f.write(f"\n{name}")
+	def get_groups(self):
+		return list(self.d.keys())
+	
+	def get_channel_repr(self):
+		channel_repr = '\n\n'.join([f"{group}:\n" + '\n'.join(channels) for group, channels in self.d.items()])
+		return channel_repr
+		
+	def add_channel(self, name, group):
+		if 't.me/' in name:
+			name = name.split('t.me/')[-1]
+		
+		if group in self.d:
+			self.d[group].append(name)
+		else:
+			self.d[group] = [name]
+		self.save()
 
-def remove_channel(name):
-	with open(os.path.join(save_path, 'channel_names.txt'), 'r') as f:
-		names = f.read().split('\n')
+	def remove_channel(self, name):
+		for group in self.d:
+			self.d[group] = [channel for channel in self.d[group] if channel != name]
+		self.save()
 
-	with open(os.path.join(save_path, 'channel_names.txt'), 'r') as f:
-		cleaned_names = [n for n in names if n != name]
-		f.write('\n'.join(cleaned_names))
+	def get_group_name(self, channel_id):
+		if str(int(channel_id)) not in self.map:
+			return
+		name = self.map[str(int(channel_id))]
+		if name not in self._d:
+			return
+		group =  self._d[name]
+		return group
+
 
 async def main():
-	with open(os.path.join(save_path, 'channel_names.txt'), 'r') as f:
-		names = f.read().split('\n')
-
+	handler = MessageHandler()
+	names = handler.get_channels()
+	
+	name_to_id = dict()
+	messages_path = os.path.join(save_path, 'all_messages.csv')
 	async for dialog in client.iter_dialogs():
-		if dialog.is_channel and (dialog.name in set(names) or dialog.entity.username in set(names)):
-			print(f"Loading messages from {dialog.name}")
-			messages_path = os.path.join(save_path, 'all_messages.csv')
+		if dialog.is_channel:
+			if dialog.name in set(names):
+				load_from = dialog.name
+			elif dialog.entity.username in set(names):
+				load_from = dialog.entity.username
+			else:
+				continue
+				
+			print(f"Loading messages from {load_from}")
+			name_to_id[int(str(dialog.id)[4:])] = load_from
 			await dump_all_messages(dialog, messages_path)
+
+	mapping_path = os.path.join(save_path, 'channel_id_map.json')
+	with open(mapping_path, 'w') as f:
+		json.dump(name_to_id, f, ensure_ascii=False)
 
 
 with client:

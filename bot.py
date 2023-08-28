@@ -9,7 +9,7 @@ from telebot.async_telebot import AsyncTeleBot
 import configparser
 from telethon.sync import TelegramClient
 
-from load_all_messages import get_channels, add_channel, remove_channel
+from load_all_messages import *
 
 config = configparser.ConfigParser()
 config.read(os.environ.get('news_config'))
@@ -25,14 +25,19 @@ RATINGS_PATH = os.path.join(save_path, "ratings.csv")
 class NewsBot(AsyncTeleBot):
     def __init__(self, api_token):
         super().__init__(api_token)
-        self.load_messages()
-        self.start_timer()
         self.wait = False
+        self.filter_by_group = None
+        self.start_timer()
     
     def load_messages(self):
         print(f"{pd.Timestamp.now().round('s')}\nLoading all messages")
-        os.system("python load_all_messages.py")
+        os.system("python -u load_all_messages.py")
         messages = pd.read_csv(MESSAGES_PATH)
+
+        if self.filter_by_group is not None:
+            group = messages.channel_id.apply(handler.get_group_name)
+            messages = messages[group == self.filter_by_group]
+
         if os.path.exists(RATINGS_PATH):
             ratings = pd.read_csv(RATINGS_PATH)
             messages_ids = messages.id.astype(str) + '-' + messages.channel_id.astype(str)
@@ -44,6 +49,21 @@ class NewsBot(AsyncTeleBot):
             
         self.messages = messages
         self.ratings = pd.DataFrame()
+
+    def filter_messages(self, filter_by_group):
+        messages = pd.read_csv(MESSAGES_PATH)
+
+        self.filter_by_group = filter_by_group
+        group = messages.channel_id.apply(handler.get_group_name)
+        messages = messages[group == self.filter_by_group]
+        if os.path.exists(RATINGS_PATH):
+            ratings = pd.read_csv(RATINGS_PATH)
+            messages_ids = messages.id.astype(str) + '-' + messages.channel_id.astype(str)
+            rated_ids = ratings.id.astype(str) + '-' + ratings.channel_id.astype(str)
+            self.messages = messages[~messages_ids.isin(rated_ids.unique())].sort_values('date', ascending=False)
+            self.ratings = ratings
+            print(f"Found {messages.shape[0]} total messages and {self.ratings.shape[0]} ratings")
+        
 
     def get_message(self):
         message = self.messages.iloc[:1]
@@ -69,6 +89,7 @@ class NewsBot(AsyncTeleBot):
 
 chat_id = int(api_token.split(":")[0])
 bot = NewsBot(api_token)
+handler = MessageHandler()
 
 def rate_markup():
     markup = InlineKeyboardMarkup()
@@ -77,6 +98,22 @@ def rate_markup():
                InlineKeyboardButton("0", callback_data="rate_0"),
                InlineKeyboardButton("1", callback_data="rate_1"),
                InlineKeyboardButton("2", callback_data="rate_2"))
+    return markup
+
+def group_markup():
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 1
+    groups = handler.get_groups()
+    buttons = [InlineKeyboardButton(g, callback_data=f"group_{g}") for g in groups]
+    markup.add(*buttons)
+    return markup
+
+def filter_by_group_markup():
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 1
+    groups = handler.get_groups()
+    buttons = [InlineKeyboardButton(g, callback_data=f"filter_by_group_{g}") for g in groups]
+    markup.add(*buttons)
     return markup
 
 @bot.message_handler(commands=['start'])
@@ -91,12 +128,18 @@ async def start_message(message):
 async def callback_query(call):
     if call.data == "is_ad":
         bot.set_rating(0, True)
-    elif call.data == 'rate_0':
-        bot.set_rating(0, False)
-    elif call.data == 'rate_1':
-        bot.set_rating(1, False)
-    elif call.data == 'rate_2':
-        bot.set_rating(2, False)
+    elif call.data.startswith("rate_"):
+        rating = call.data.split("rate_")[-1]
+        bot.set_rating(int(rating), False)
+    elif call.data.startswith("group_"):
+        bot.group = call.data.split("group_")[-1]
+        return
+    elif call.data.startswith("filter_by_group_"):
+        group = call.data.split("filter_by_group_")[-1]
+        bot.filter_messages(group)
+        # bot.filter_by_group = group
+        # bot.load_messages()
+        await bot.send_message(bot.chat_id, f"Selected group {bot.filter_by_group}")
     msg = bot.get_message()
     async with TelegramClient(username, api_id, api_hash) as client:
         await client.forward_messages(chat_id, int(msg.id.iloc[0]), int(msg.channel_id.iloc[0]))
@@ -106,21 +149,25 @@ async def callback_query(call):
 async def handle_text(message):
     bot.chat_id = message.chat.id
     if message.text.startswith("/get_channels"):
-        channel_names = get_channels()
-        await bot.send_message(bot.chat_id, "\n".join(channel_names))
+        channel_repr = handler.get_channel_repr()
+        await bot.send_message(bot.chat_id, channel_repr)
+    elif message.text.startswith("/select_group"):
+        await bot.send_message(bot.chat_id, "Select a group", reply_markup=filter_by_group_markup())
     elif message.text.startswith("/add_channel"):
         bot.wait = 'add'
-        await bot.send_message(bot.chat_id, "What is the channel name/link?")
+        await bot.send_message(bot.chat_id, "Select a group and send the channel name/link", reply_markup=group_markup())
     elif message.text.startswith("/remove_channel"):
         bot.wait = 'remove'
-        await bot.send_message(bot.chat_id, "What is the channel name/link?")
+        await bot.send_message(bot.chat_id, "Select a group and send the channel name/link", reply_markup=group_markup())
     elif bot.wait == 'add':
+        handler.add_channel(message.text, bot.group)
         bot.wait = False
-        add_channel(message.text)
+        bot.group = None
         await bot.send_message(bot.chat_id, f"Added {message.text}")
     elif bot.wait == 'remove':
-        bot.wait = False
-        remove_channel(message.text)
+        handler.remove_channel(message.text)
         await bot.send_message(bot.chat_id, f"Removed {message.text}")
+        bot.wait = False
+        bot.group = None
 
 asyncio.run(bot.infinity_polling())
