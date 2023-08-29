@@ -7,10 +7,20 @@
 
 
 ### Usage
-Add channel names to ```channel_names.txt``` telegram bot token and telegram client credentials to ```config.ini```
+Add channel names to ```channels.json``` and telegram bot token and client credentials to ```config.ini```
 
+#### As a package
 ```
-sudo docker build container_name .
+pip install -r requirements.txt
 
-sudo docker run -v /home:/app/home -e news_config="path-to-config.ini" container_name
+export news_config="path-to-config.ini"
+
+python bot.py
+```
+
+#### With docker
+```
+docker build container_name .
+
+docker run -v /home:/app/home -e news_config="path-to-config.ini" container_name
 ```

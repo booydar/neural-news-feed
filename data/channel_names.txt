@@ -1,3 +1,0 @@
-Channel 1
-Channel 2
-...
