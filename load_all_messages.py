@@ -40,7 +40,6 @@ async def dump_all_messages(channel, save_path=save_path):
 			min_id=newest_id,
 			hash=0))
 		if not history.messages:
-			print('All messages loaded')
 			break
 		messages = history.messages
 		for message in messages:

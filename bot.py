@@ -63,7 +63,14 @@ class NewsBot(AsyncTeleBot):
             self.messages = messages[~messages_ids.isin(rated_ids.unique())].sort_values('date', ascending=False)
             self.ratings = ratings
             print(f"Found {messages.shape[0]} total messages and {self.ratings.shape[0]} ratings")
-        
+    
+    def remove_message(self, msg):
+        messages = pd.read_csv(MESSAGES_PATH)
+        remove_mask = (messages.channel_id == msg.channel_id.values[0]) & (messages.id == msg.id.values[0])
+        print(f"Removing {remove_mask.sum()} messages")
+        messages = messages[~remove_mask]
+        messages.to_csv(MESSAGES_PATH)
+        self.messages = self.messages.iloc[1:]
 
     def get_message(self):
         message = self.messages.iloc[:1]
@@ -137,13 +144,16 @@ async def callback_query(call):
     elif call.data.startswith("filter_by_group_"):
         group = call.data.split("filter_by_group_")[-1]
         bot.filter_messages(group)
-        # bot.filter_by_group = group
-        # bot.load_messages()
         await bot.send_message(bot.chat_id, f"Selected group {bot.filter_by_group}")
     msg = bot.get_message()
-    async with TelegramClient(username, api_id, api_hash) as client:
-        await client.forward_messages(chat_id, int(msg.id.iloc[0]), int(msg.channel_id.iloc[0]))
-    await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
+    try:
+        async with TelegramClient(username, api_id, api_hash) as client:
+            await client.forward_messages(chat_id, int(msg.id.iloc[0]), int(msg.channel_id.iloc[0]))
+        await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
+    except Exception as e:
+        print(f'Got exception {e}')
+        bot.remove_message(msg)
+        await bot.send_message(bot.chat_id, f'Got exception {e}. Please use /start')
 
 @bot.message_handler(content_types=["text"])
 async def handle_text(message):
@@ -158,7 +168,10 @@ async def handle_text(message):
         await bot.send_message(bot.chat_id, "Select a group and send the channel name/link", reply_markup=group_markup())
     elif message.text.startswith("/remove_channel"):
         bot.wait = 'remove'
-        await bot.send_message(bot.chat_id, "Select a group and send the channel name/link", reply_markup=group_markup())
+        await bot.send_message(bot.chat_id, "Send the channel name/link")
+    elif message.text.startswith("/load_messages"):
+        bot.load_messages()
+        await bot.send_message(bot.chat_id, "Loaded all messages.")
     elif bot.wait == 'add':
         handler.add_channel(message.text, bot.group)
         bot.wait = False
