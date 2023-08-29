@@ -34,7 +34,7 @@ class NewsBot(AsyncTeleBot):
         os.system("python -u load_all_messages.py")
         messages = pd.read_csv(MESSAGES_PATH)
 
-        if self.filter_by_group is not None:
+        if self.filter_by_group not in {'all', None}:
             group = messages.channel_id.apply(handler.get_group_name)
             messages = messages[group == self.filter_by_group]
 
@@ -55,7 +55,8 @@ class NewsBot(AsyncTeleBot):
 
         self.filter_by_group = filter_by_group
         group = messages.channel_id.apply(handler.get_group_name)
-        messages = messages[group == self.filter_by_group]
+        if self.filter_by_group not in {'all', None}:
+            messages = messages[group == self.filter_by_group]
         if os.path.exists(RATINGS_PATH):
             ratings = pd.read_csv(RATINGS_PATH)
             messages_ids = messages.id.astype(str) + '-' + messages.channel_id.astype(str)
@@ -120,6 +121,7 @@ def filter_by_group_markup():
     markup.row_width = 1
     groups = handler.get_groups()
     buttons = [InlineKeyboardButton(g, callback_data=f"filter_by_group_{g}") for g in groups]
+    buttons.append(InlineKeyboardButton('All groups', callback_data=f"filter_by_group_all"))
     markup.add(*buttons)
     return markup
 
