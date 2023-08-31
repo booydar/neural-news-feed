@@ -1,6 +1,6 @@
 import os
-import pandas as pd
 import asyncio
+import datetime
 from threading import Timer
 
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -19,8 +19,8 @@ username = config['Telegram']['username']
 api_token = config['Telegram']['bot_token']
 save_path = config['Telegram']['save_path']
 
-MESSAGES_PATH = os.path.join(save_path, "all_messages.csv")
-RATINGS_PATH = os.path.join(save_path, "ratings.csv")
+MESSAGES_PATH = os.path.join(save_path, "all_messages.json")
+RATINGS_PATH = os.path.join(save_path, "ratings.json")
 
 class NewsBot(AsyncTeleBot):
     def __init__(self, api_token):
@@ -28,62 +28,74 @@ class NewsBot(AsyncTeleBot):
         self.wait = False
         self.filter_by_group = None
         self.start_timer()
+        self.load_messages()
     
     def load_messages(self):
-        print(f"{pd.Timestamp.now().round('s')}\nLoading all messages")
+        print(f"{datetime.datetime.now().strftime('%H:%M %d.%m.%Y')}\nLoading all messages")
         os.system("python -u load_all_messages.py")
-        messages = pd.read_csv(MESSAGES_PATH)
+        with open(MESSAGES_PATH, 'r') as f:
+            messages = json.load(f)
 
         if self.filter_by_group not in {'all', None}:
-            group = messages.channel_id.apply(handler.get_group_name)
-            messages = messages[group == self.filter_by_group]
+            messages = list(filter(lambda msg: handler.get_group_name(msg['channel_id']) == self.filter_by_group, messages))
 
         if os.path.exists(RATINGS_PATH):
-            ratings = pd.read_csv(RATINGS_PATH)
-            messages_ids = messages.id.astype(str) + '-' + messages.channel_id.astype(str)
-            rated_ids = ratings.id.astype(str) + '-' + ratings.channel_id.astype(str)
-            self.messages = messages[~messages_ids.isin(rated_ids.unique())].sort_values('date', ascending=False)
+            with open(RATINGS_PATH, 'r') as f:
+                ratings = json.load(f)
+            rated_ids = {str(r['id']) + '-' + str(r['channel_id']) for r in ratings}
+            messages = list(filter(lambda msg: str(msg['id']) + '-' + str(msg['channel_id']) not in rated_ids, messages))
+
+            self.messages = sorted(messages, key=lambda msg: msg['date'], reverse=True)
             self.ratings = ratings
-            print(f"Found {messages.shape[0]} total messages and {self.ratings.shape[0]} ratings")
+            print(f"Found {len(self.messages)} total messages and {len(self.ratings)} ratings")
             return
             
         self.messages = messages
-        self.ratings = pd.DataFrame()
+        self.ratings = []
 
     def filter_messages(self, filter_by_group):
-        messages = pd.read_csv(MESSAGES_PATH)
+        with open(MESSAGES_PATH, 'r') as f:
+            messages = json.load(f)
 
-        self.filter_by_group = filter_by_group
-        group = messages.channel_id.apply(handler.get_group_name)
-        if self.filter_by_group not in {'all', None}:
-            messages = messages[group == self.filter_by_group]
+        if filter_by_group not in {'all', None}:
+            messages = list(filter(lambda msg: handler.get_group_name(msg['channel_id']) == self.filter_by_group, messages))
+
         if os.path.exists(RATINGS_PATH):
-            ratings = pd.read_csv(RATINGS_PATH)
-            messages_ids = messages.id.astype(str) + '-' + messages.channel_id.astype(str)
-            rated_ids = ratings.id.astype(str) + '-' + ratings.channel_id.astype(str)
-            self.messages = messages[~messages_ids.isin(rated_ids.unique())].sort_values('date', ascending=False)
+            with open(RATINGS_PATH, 'r') as f:
+                ratings = json.load(f)
+            rated_ids = {str(r['id']) + '-' + str(r['channel_id']) for r in ratings}
+            messages = list(filter(lambda msg: str(msg['id']) + '-' + str(msg['channel_id']) not in rated_ids, messages))
+
+            self.messages = sorted(messages, key=lambda msg: msg['date'], reverse=True)
             self.ratings = ratings
-            print(f"Found {messages.shape[0]} total messages and {self.ratings.shape[0]} ratings")
+            print(f"Found {len(self.messages)} total messages and {len(self.ratings)} ratings")
     
-    def remove_message(self, msg):
-        messages = pd.read_csv(MESSAGES_PATH)
-        remove_mask = (messages.channel_id == msg.channel_id.values[0]) & (messages.id == msg.id.values[0])
-        print(f"Removing {remove_mask.sum()} messages")
-        messages = messages[~remove_mask]
-        messages.to_csv(MESSAGES_PATH)
-        self.messages = self.messages.iloc[1:]
+    def remove_message(self, message):
+        with open(MESSAGES_PATH, 'r') as f:
+            messages = json.load(f)
+
+        prevoius_len = len(messages)
+        messages = list(filter(lambda msg: (msg['id'] != message['id']) or \
+                                      (msg['channel_id'] != message['channel_id']), messages))
+        print(f"Removing {prevoius_len - len(messages)} messages")
+        with open(MESSAGES_PATH, 'w') as f:
+            json.dump(messages, f, ensure_ascii=False)
+        self.messages = self.messages[1:]
 
     def get_message(self):
-        message = self.messages.iloc[:1]
+        message = self.messages[0]
         return message
     
     def set_rating(self, rating, is_advertisement=False):
-        message = self.messages.iloc[:1].copy()
+        message = dict(**self.messages[0])
+        message.pop('message')
         message['rating'] = rating
         message['is_advertisement'] = is_advertisement
-        self.messages = self.messages.iloc[1:]
-        self.ratings = pd.concat((self.ratings, message))
-        self.ratings.to_csv(RATINGS_PATH, index=False)
+        self.messages = self.messages[1:]
+        self.ratings.append(message)
+
+        with open(RATINGS_PATH, 'w') as f:
+            json.dump(self.ratings, f, ensure_ascii=False)
 
     def start_timer(self):
         class RepeatTimer(Timer):
@@ -130,7 +142,7 @@ async def start_message(message):
     bot.chat_id = message.chat.id
     msg = bot.get_message()
     async with TelegramClient(username, api_id, api_hash) as client:
-        await client.forward_messages(chat_id, int(msg.id.iloc[0]), int(msg.channel_id.iloc[0]))
+        await client.forward_messages(chat_id, int(msg['id']), int(msg['channel_id']))
     await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -145,12 +157,14 @@ async def callback_query(call):
         return
     elif call.data.startswith("filter_by_group_"):
         group = call.data.split("filter_by_group_")[-1]
+        bot.filter_by_group = group
         bot.filter_messages(group)
         await bot.send_message(bot.chat_id, f"Selected group {bot.filter_by_group}")
     msg = bot.get_message()
     try:
         async with TelegramClient(username, api_id, api_hash) as client:
-            await client.forward_messages(chat_id, int(msg.id.iloc[0]), int(msg.channel_id.iloc[0]))
+            print("int(msg['id']), int(msg['channel_id'])", int(msg['id']), int(msg['channel_id']))
+            await client.forward_messages(chat_id, int(msg['id']), int(msg['channel_id']))
         await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
     except Exception as e:
         print(f'Got exception {e}')

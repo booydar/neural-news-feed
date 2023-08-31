@@ -1,7 +1,7 @@
 import os
 import json
 import configparser
-import pandas as pd
+import numpy as np
 
 from telethon.sync import TelegramClient
 from telethon.tl.functions.messages import GetHistoryRequest
@@ -20,15 +20,20 @@ async def dump_all_messages(channel, save_path=save_path):
 	offset_msg = 0
 	limit_msg = 1000
 
-	all_messages = []
+	new_messages = []
 	newest_id = 0
 	attributes = ['id', 'peer_id', 'date', 'message']
-	full_db = pd.DataFrame(columns=attributes)
+
 	if os.path.exists(save_path):
-		full_db = pd.read_csv(save_path)
+		with open(save_path, 'r') as f:
+			loaded_messages = json.load(f)
+
 		channel_id = int(str(channel.id)[4:])
-		if channel_id in full_db.channel_id.values:
-			newest_id = full_db[full_db.channel_id == channel_id]['id'].astype(int).max()
+		channel_msg_ids = [msg['id'] for msg in loaded_messages if msg['channel_id'] == channel_id]
+		if len(channel_msg_ids) > 0:
+			newest_id = np.max(channel_msg_ids)
+	else: 
+		loaded_messages = []
 
 	while True:
 		history = await client(GetHistoryRequest(
@@ -45,22 +50,22 @@ async def dump_all_messages(channel, save_path=save_path):
 		for message in messages:
 			message_dict = message.to_dict()
 			results = {a:v for a, v in message_dict.items() if a in set(attributes)}
-			all_messages.append(results)
+			results['id'] = int(results['id'])
+			results['date'] = str(results['date'])
+			results['channel_id'] = int(results.pop('peer_id')['channel_id'])
+
+			new_messages.append(results)
 
 		offset_msg = messages[-1].id
 	
-	if len(all_messages) == 0:
+	if len(new_messages) == 0:
 		return 
-	print(f'Loaded {len(all_messages)} messages')
+	print(f'Loaded {len(new_messages)} messages')
 	
-	save_cols = ['id', 'channel_id', 'date', 'message']
-	res_df = pd.DataFrame(all_messages)
-	res_df.date = res_df.date.apply(pd.to_datetime)
-	res_df['id'] = res_df['id'].astype(int)
-	res_df['channel_id'] = res_df.peer_id.apply(lambda x: x['channel_id']).astype(int)
+	loaded_messages += new_messages
+	with open(save_path, 'w') as f:
+		json.dump(loaded_messages, f, ensure_ascii=False)
 
-	full_db = pd.concat((full_db, res_df))[save_cols]
-	full_db.to_csv(save_path, index=False)
 
 class MessageHandler:
 	def __init__(self):
@@ -121,7 +126,7 @@ async def main():
 	names = handler.get_channels()
 	
 	name_to_id = dict()
-	messages_path = os.path.join(save_path, 'all_messages.csv')
+	messages_path = os.path.join(save_path, 'all_messages.json')
 	async for dialog in client.iter_dialogs():
 		if dialog.is_channel:
 			if dialog.name in set(names):
