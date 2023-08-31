@@ -163,7 +163,6 @@ async def callback_query(call):
     msg = bot.get_message()
     try:
         async with TelegramClient(username, api_id, api_hash) as client:
-            print("int(msg['id']), int(msg['channel_id'])", int(msg['id']), int(msg['channel_id']))
             await client.forward_messages(chat_id, int(msg['id']), int(msg['channel_id']))
         await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
     except Exception as e:
