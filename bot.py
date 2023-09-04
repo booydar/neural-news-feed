@@ -8,6 +8,7 @@ from telebot.async_telebot import AsyncTeleBot
 
 import configparser
 from telethon.sync import TelegramClient
+from telethon.errors import MessageIdInvalidError
 
 from load_all_messages import *
 
@@ -165,10 +166,13 @@ async def callback_query(call):
         async with TelegramClient(username, api_id, api_hash) as client:
             await client.forward_messages(chat_id, int(msg['id']), int(msg['channel_id']))
         await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
-    except Exception as e:
+    except MessageIdInvalidError as e:
         print(f'Got exception {e}')
         bot.remove_message(msg)
         await bot.send_message(bot.chat_id, f'Got exception {e}. Please use /start')
+    except Exception as e:
+        print(f'Got exception {e}')
+        await bot.send_message(bot.chat_id, f'Got exception {e}. Please use /start or restart the bot.')
 
 @bot.message_handler(content_types=["text"])
 async def handle_text(message):
