@@ -27,6 +27,7 @@ class NewsBot(AsyncTeleBot):
     def __init__(self, api_token):
         super().__init__(api_token)
         self.wait = False
+        self.selected_message = None
         self.filter_by_group = None
         self.start_timer()
         self.load_messages()
@@ -84,16 +85,21 @@ class NewsBot(AsyncTeleBot):
         self.messages = self.messages[1:]
 
     def get_message(self):
-        message = self.messages[0]
-        return message
+        if self.selected_message is not None:
+            return self.selected_message
+        else:
+            message = self.messages[0]
+            self.messages = self.messages[1:]
+            self.selected_message = message
+            return message
     
     def set_rating(self, rating, is_advertisement=False):
-        message = dict(**self.messages[0])
+        message = dict(**self.selected_message)
         message.pop('message')
         message['rating'] = rating
         message['is_advertisement'] = is_advertisement
-        self.messages = self.messages[1:]
         self.ratings.append(message)
+        self.selected_message = None
 
         with open(RATINGS_PATH, 'w') as f:
             json.dump(self.ratings, f, ensure_ascii=False)
