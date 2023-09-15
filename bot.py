@@ -82,7 +82,7 @@ class NewsBot(AsyncTeleBot):
         print(f"Removing {prevoius_len - len(messages)} messages")
         with open(MESSAGES_PATH, 'w') as f:
             json.dump(messages, f, ensure_ascii=False)
-        self.messages = self.messages[1:]
+        self.selected_message = None
 
     def get_message(self):
         if self.selected_message is not None:
