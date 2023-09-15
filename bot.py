@@ -120,11 +120,11 @@ handler = MessageHandler()
 
 def rate_markup():
     markup = InlineKeyboardMarkup()
-    markup.row_width = 4
-    markup.add(InlineKeyboardButton("Ad", callback_data="is_ad"),
-               InlineKeyboardButton("0", callback_data="rate_0"),
-               InlineKeyboardButton("1", callback_data="rate_1"),
-               InlineKeyboardButton("2", callback_data="rate_2"))
+    num_rates = 5
+    markup.row_width = num_rates + 1
+    buttons = [InlineKeyboardButton("Ad", callback_data="is_ad")]
+    buttons += [InlineKeyboardButton(str(r), callback_data=f"rate_{r}") for r in range(1, num_rates+1)]
+    markup.add(*buttons)
     return markup
 
 def group_markup():
