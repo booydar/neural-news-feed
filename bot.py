@@ -161,7 +161,7 @@ async def callback_query(call):
         bot.set_rating(int(rating), False)
     elif call.data.startswith("group_"):
         bot.group = call.data.split("group_")[-1]
-        return
+        await bot.send_message(bot.chat_id, "Send the channel name/link")
     elif call.data.startswith("filter_by_group_"):
         group = call.data.split("filter_by_group_")[-1]
         bot.filter_by_group = group
@@ -190,7 +190,7 @@ async def handle_text(message):
         await bot.send_message(bot.chat_id, "Select a group", reply_markup=filter_by_group_markup())
     elif message.text.startswith("/add_channel"):
         bot.wait = 'add'
-        await bot.send_message(bot.chat_id, "Select a group and send the channel name/link", reply_markup=group_markup())
+        await bot.send_message(bot.chat_id, "Select a group", reply_markup=group_markup())
     elif message.text.startswith("/remove_channel"):
         bot.wait = 'remove'
         await bot.send_message(bot.chat_id, "Send the channel name/link")
