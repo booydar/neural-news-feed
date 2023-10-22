@@ -29,6 +29,7 @@ class NewsBot(AsyncTeleBot):
         self.wait = False
         self.selected_message = None
         self.filter_by_group = None
+        self.last_msg_id = None
         self.start_timer()
         self.load_messages()
     
@@ -150,7 +151,8 @@ async def start_message(message):
     msg = bot.get_message()
     async with TelegramClient(username, api_id, api_hash) as client:
         await client.forward_messages(chat_id, int(msg['id']), int(msg['channel_id']))
-    await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
+    msg = await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
+    bot.last_msg_id = msg.message_id
 
 @bot.callback_query_handler(func=lambda call: True)
 async def callback_query(call):
@@ -159,6 +161,9 @@ async def callback_query(call):
     elif call.data.startswith("rate_"):
         rating = call.data.split("rate_")[-1]
         bot.set_rating(int(rating), False)
+        await bot.delete_message(bot.chat_id, bot.last_msg_id)
+        if int(rating) < 4:
+            await bot.delete_message(bot.chat_id, bot.last_msg_id - 1)
     elif call.data.startswith("group_"):
         bot.group = call.data.split("group_")[-1]
         await bot.send_message(bot.chat_id, "Send the channel name/link")
@@ -171,7 +176,8 @@ async def callback_query(call):
     try:
         async with TelegramClient(username, api_id, api_hash) as client:
             await client.forward_messages(chat_id, int(msg['id']), int(msg['channel_id']))
-        await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
+        msg = await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
+        bot.last_msg_id = msg.message_id
     except MessageIdInvalidError as e:
         print(f'Got exception {e}')
         bot.remove_message(msg)
