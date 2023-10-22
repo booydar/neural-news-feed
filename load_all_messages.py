@@ -1,7 +1,6 @@
 import os
 import json
 import configparser
-import numpy as np
 
 from telethon.sync import TelegramClient
 from telethon.tl.functions.messages import GetHistoryRequest
@@ -31,7 +30,7 @@ async def dump_all_messages(channel, save_path=save_path):
 		channel_id = int(str(channel.id)[4:])
 		channel_msg_ids = [msg['id'] for msg in loaded_messages if msg['channel_id'] == channel_id]
 		if len(channel_msg_ids) > 0:
-			newest_id = np.max(channel_msg_ids)
+			newest_id = max(channel_msg_ids)
 	else: 
 		loaded_messages = []
 
