@@ -158,6 +158,8 @@ async def start_message(message):
 async def callback_query(call):
     if call.data == "is_ad":
         bot.set_rating(0, True)
+        await bot.delete_message(bot.chat_id, bot.last_msg_id)
+        await bot.delete_message(bot.chat_id, bot.last_msg_id - 1)
     elif call.data.startswith("rate_"):
         rating = call.data.split("rate_")[-1]
         bot.set_rating(int(rating), False)
