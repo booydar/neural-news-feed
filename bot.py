@@ -8,7 +8,7 @@ from telebot.async_telebot import AsyncTeleBot
 
 import configparser
 from telethon.sync import TelegramClient
-from telethon.errors import MessageIdInvalidError
+from telethon.errors import MessageIdInvalidError, ChatForwardsRestrictedError
 
 from load_messages import *
 
@@ -110,7 +110,7 @@ class NewsBot(AsyncTeleBot):
                 while not self.finished.wait(self.interval):
                     self.function(*self.args, **self.kwargs)
 
-        self.timer = RepeatTimer(3600, self.load_messages)
+        self.timer = RepeatTimer(10, self.load_messages)
         self.timer.start()
         
 
@@ -154,7 +154,11 @@ async def main():
     except MessageIdInvalidError as e:
         print(f'Got exception {e}')
         bot.remove_message(msg)
-        await bot.send_message(bot.chat_id, f'Got exception {e}. Please use /start')
+        await main()
+    except ChatForwardsRestrictedError as e:
+        print(f'Got exception {e}')
+        bot.remove_message(msg)
+        await main()
     except Exception as e:
         print(f'Got exception {e}')
         await bot.send_message(bot.chat_id, f'Got exception {e}. Please use /start or restart the bot.')
