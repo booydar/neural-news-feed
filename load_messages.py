@@ -120,7 +120,7 @@ class MessageHandler:
 		return group
 
 
-async def main():
+async def load_all_messages():
 	handler = MessageHandler()
 	names = handler.get_channels()
 	
@@ -145,4 +145,4 @@ async def main():
 
 
 with client:
-	client.loop.run_until_complete(main())
+	client.loop.run_until_complete(load_all_messages())

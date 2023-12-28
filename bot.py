@@ -10,7 +10,7 @@ import configparser
 from telethon.sync import TelegramClient
 from telethon.errors import MessageIdInvalidError
 
-from load_all_messages import *
+from load_messages import *
 
 config = configparser.ConfigParser()
 config.read(os.environ.get('news_config'))
@@ -35,7 +35,6 @@ class NewsBot(AsyncTeleBot):
     
     def load_messages(self):
         print(f"{datetime.datetime.now().strftime('%H:%M %d.%m.%Y')}\nLoading all messages")
-        os.system("python -u load_all_messages.py")
         with open(MESSAGES_PATH, 'r') as f:
             messages = json.load(f)
 
@@ -145,14 +144,25 @@ def filter_by_group_markup():
     markup.add(*buttons)
     return markup
 
+async def main():
+    msg = bot.get_message()
+    try:
+        async with TelegramClient(username, api_id, api_hash) as client:
+            await client.forward_messages(chat_id, int(msg['id']), int(msg['channel_id']))
+        msg = await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
+        bot.last_msg_id = msg.message_id
+    except MessageIdInvalidError as e:
+        print(f'Got exception {e}')
+        bot.remove_message(msg)
+        await bot.send_message(bot.chat_id, f'Got exception {e}. Please use /start')
+    except Exception as e:
+        print(f'Got exception {e}')
+        await bot.send_message(bot.chat_id, f'Got exception {e}. Please use /start or restart the bot.')
+
 @bot.message_handler(commands=['start'])
 async def start_message(message):    
     bot.chat_id = message.chat.id
-    msg = bot.get_message()
-    async with TelegramClient(username, api_id, api_hash) as client:
-        await client.forward_messages(chat_id, int(msg['id']), int(msg['channel_id']))
-    msg = await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
-    bot.last_msg_id = msg.message_id
+    await main()
 
 @bot.callback_query_handler(func=lambda call: True)
 async def callback_query(call):
@@ -169,24 +179,13 @@ async def callback_query(call):
     elif call.data.startswith("group_"):
         bot.group = call.data.split("group_")[-1]
         await bot.send_message(bot.chat_id, "Send the channel name/link")
+        return
     elif call.data.startswith("filter_by_group_"):
         group = call.data.split("filter_by_group_")[-1]
         bot.filter_by_group = group
         bot.filter_messages(group)
         await bot.send_message(bot.chat_id, f"Selected group {bot.filter_by_group}")
-    msg = bot.get_message()
-    try:
-        async with TelegramClient(username, api_id, api_hash) as client:
-            await client.forward_messages(chat_id, int(msg['id']), int(msg['channel_id']))
-        msg = await bot.send_message(bot.chat_id, "Rate this post", reply_markup=rate_markup())
-        bot.last_msg_id = msg.message_id
-    except MessageIdInvalidError as e:
-        print(f'Got exception {e}')
-        bot.remove_message(msg)
-        await bot.send_message(bot.chat_id, f'Got exception {e}. Please use /start')
-    except Exception as e:
-        print(f'Got exception {e}')
-        await bot.send_message(bot.chat_id, f'Got exception {e}. Please use /start or restart the bot.')
+    await main()
 
 @bot.message_handler(content_types=["text"])
 async def handle_text(message):
