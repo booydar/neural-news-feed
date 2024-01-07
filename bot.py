@@ -11,6 +11,7 @@ from telethon.sync import TelegramClient
 from telethon.errors import MessageIdInvalidError, ChatForwardsRestrictedError
 
 from load_messages import *
+from ranking import get_channel_ratings, get_message_score
 
 config = configparser.ConfigParser()
 config.read(os.environ.get('news_config'))
@@ -30,6 +31,7 @@ class NewsBot(AsyncTeleBot):
         self.selected_message = None
         self.filter_by_group = None
         self.last_msg_id = None
+        self.channel_ratings = None
         self.start_timer()
         self.load_messages()
     
@@ -47,9 +49,11 @@ class NewsBot(AsyncTeleBot):
             rated_ids = {str(r['id']) + '-' + str(r['channel_id']) for r in ratings}
             messages = list(filter(lambda msg: str(msg['id']) + '-' + str(msg['channel_id']) not in rated_ids, messages))
 
-            self.messages = sorted(messages, key=lambda msg: msg['date'], reverse=True)
             self.ratings = ratings
-            print(f"Found {len(self.messages)} total messages and {len(self.ratings)} ratings")
+            self.channel_ratings = get_channel_ratings(ratings)
+            self.messages = self.sort(messages)
+            print(f"Found {len(messages)} total messages and {len(self.ratings)} ratings")
+
             return
             
         self.messages = messages
@@ -68,9 +72,10 @@ class NewsBot(AsyncTeleBot):
             rated_ids = {str(r['id']) + '-' + str(r['channel_id']) for r in ratings}
             messages = list(filter(lambda msg: str(msg['id']) + '-' + str(msg['channel_id']) not in rated_ids, messages))
 
-            self.messages = sorted(messages, key=lambda msg: msg['date'], reverse=True)
             self.ratings = ratings
-            print(f"Found {len(self.messages)} total messages and {len(self.ratings)} ratings")
+            self.channel_ratings = get_channel_ratings(ratings)
+            self.messages = self.sort(messages)
+            print(f"Found {len(messages)} total messages and {len(self.ratings)} ratings")
     
     def remove_message(self, message):
         with open(MESSAGES_PATH, 'r') as f:
@@ -98,11 +103,23 @@ class NewsBot(AsyncTeleBot):
         message.pop('message')
         message['rating'] = rating
         message['is_advertisement'] = is_advertisement
+        if hasattr(self, "channel_ratings"):
+            message['ranking_method'] = "channel_ratings_v0"
         self.ratings.append(message)
         self.selected_message = None
 
         with open(RATINGS_PATH, 'w') as f:
             json.dump(self.ratings, f, ensure_ascii=False)
+    
+    def sort(self, messages):
+        last_messages = sorted(messages, key=lambda msg: msg['date'], reverse=True)
+        last_messages = last_messages[:2048]
+        sorted_messages = sorted(last_messages, key=lambda msg: get_message_score(msg, self.channel_ratings), reverse=True)
+
+        for msg in sorted_messages[:20]:
+            print(get_message_score(msg, self.channel_ratings), msg)
+            print()
+        return sorted_messages
 
     def start_timer(self):
         class RepeatTimer(Timer):
