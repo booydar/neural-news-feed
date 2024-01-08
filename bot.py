@@ -104,7 +104,7 @@ class NewsBot(AsyncTeleBot):
         message['rating'] = rating
         message['is_advertisement'] = is_advertisement
         if hasattr(self, "channel_ratings"):
-            message['ranking_method'] = "channel_ratings_v0"
+            message['ranking_method'] = "channel_ratings_v1"
         self.ratings.append(message)
         self.selected_message = None
 
@@ -114,10 +114,16 @@ class NewsBot(AsyncTeleBot):
     def sort(self, messages):
         last_messages = sorted(messages, key=lambda msg: msg['date'], reverse=True)
         last_messages = last_messages[:2048]
+        print('\n\n\nLatest:')
+        for msg in last_messages[:5]:
+            print(get_message_score(msg, self.channel_ratings, verbose=True), msg)
+            print()
+
         sorted_messages = sorted(last_messages, key=lambda msg: get_message_score(msg, self.channel_ratings), reverse=True)
 
-        for msg in sorted_messages[:20]:
-            print(get_message_score(msg, self.channel_ratings), msg)
+        print('\n\n\nSorted:')
+        for msg in sorted_messages[:5]:
+            print(get_message_score(msg, self.channel_ratings, verbose=True), msg)
             print()
         return sorted_messages
 
@@ -127,7 +133,7 @@ class NewsBot(AsyncTeleBot):
                 while not self.finished.wait(self.interval):
                     self.function(*self.args, **self.kwargs)
 
-        self.timer = RepeatTimer(10, self.load_messages)
+        self.timer = RepeatTimer(7200, self.load_messages)
         self.timer.start()
         
 
