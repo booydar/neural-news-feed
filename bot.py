@@ -37,6 +37,7 @@ class NewsBot(AsyncTeleBot):
     
     def load_messages(self):
         print(f"{datetime.datetime.now().strftime('%H:%M %d.%m.%Y')}\nLoading all messages")
+        os.system("python -u load_all_messages.py")
         with open(MESSAGES_PATH, 'r') as f:
             messages = json.load(f)
 
@@ -104,7 +105,7 @@ class NewsBot(AsyncTeleBot):
         message['rating'] = rating
         message['is_advertisement'] = is_advertisement
         if hasattr(self, "channel_ratings"):
-            message['ranking_method'] = "channel_ratings_v1"
+            message['ranking_method'] = "channel_ratings_v2"
         self.ratings.append(message)
         self.selected_message = None
 

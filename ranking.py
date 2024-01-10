@@ -17,6 +17,7 @@ def get_message_score(msg, channel_ratings, verbose=False):
     is_last_hours = hours_past < 3
     is_last_days = (hours_past / 24) < 2
     is_this_month = (hours_past / 24 / 30) < 1
+    time_of_day = msg_dt - pd.Timestamp(msg_dt.date(), tz='UTC')
 
     channel_mean_rate = channel_ratings.get(msg['channel_id'], 3)
 
@@ -26,4 +27,5 @@ def get_message_score(msg, channel_ratings, verbose=False):
         print("is_last_hours * 1000 + is_last_days * 100  + is_this_month * 10 + channel_mean_rate")
         print(is_last_hours * 1000, is_last_days * 100,  is_this_month * 10, channel_mean_rate)
     msg_score = is_last_hours * 1000 + is_last_days * 100  + is_this_month * 10 + channel_mean_rate
-    return msg_score
+    
+    return msg_score, msg_dt.date(), -time_of_day
