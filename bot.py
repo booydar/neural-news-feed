@@ -37,7 +37,7 @@ class NewsBot(AsyncTeleBot):
     
     def load_messages(self):
         print(f"{datetime.datetime.now().strftime('%H:%M %d.%m.%Y')}\nLoading all messages")
-        os.system("python -u load_all_messages.py")
+        os.system("python -u load_messages.py")
         with open(MESSAGES_PATH, 'r') as f:
             messages = json.load(f)
 
