@@ -8,9 +8,9 @@ def get_channel_ratings(ratings):
     channel_ratings = {channel_id: mean([r['rating'] for r in ratings if int(r['channel_id']) == channel_id]) for channel_id in channel_ids}
     return channel_ratings
 
-now = pd.Timestamp.now(tz='UTC')
 
 def get_message_score(msg, channel_ratings, verbose=False):
+    now = pd.Timestamp.now(tz='UTC')
     msg_dt = pd.to_datetime(msg['date'])
 
     hours_past = (now - msg_dt).total_seconds() / 3600
