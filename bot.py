@@ -20,19 +20,20 @@ api_hash = config['Telegram']['api_hash']
 username = config['Telegram']['username']
 api_token = config['Telegram']['bot_token']
 save_path = config['Telegram']['save_path']
+update_interval = config['Telegram'].get("update_interval", 3600)
 
 MESSAGES_PATH = os.path.join(save_path, "all_messages.json")
 RATINGS_PATH = os.path.join(save_path, "ratings.json")
 
 class NewsBot(AsyncTeleBot):
-    def __init__(self, api_token):
+    def __init__(self, api_token, update_interval=3600):
         super().__init__(api_token)
         self.wait = False
         self.selected_message = None
         self.filter_by_group = None
         self.last_msg_id = None
         self.channel_ratings = None
-        self.start_timer()
+        self.start_timer(update_interval)
         self.load_messages()
     
     def load_messages(self):
@@ -54,7 +55,8 @@ class NewsBot(AsyncTeleBot):
             self.channel_ratings = get_channel_ratings(ratings)
             self.messages = self.sort(messages)
             print(f"Found {len(messages)} total messages and {len(self.ratings)} ratings")
-
+            if self.messages[0] == self.selected_message:
+                self.messages = self.messages[1:]
             return
             
         self.messages = messages
@@ -128,18 +130,18 @@ class NewsBot(AsyncTeleBot):
             print()
         return sorted_messages
 
-    def start_timer(self):
+    def start_timer(self, update_interval):
         class RepeatTimer(Timer):
             def run(self):
                 while not self.finished.wait(self.interval):
                     self.function(*self.args, **self.kwargs)
 
-        self.timer = RepeatTimer(7200, self.load_messages)
+        self.timer = RepeatTimer(update_interval, self.load_messages)
         self.timer.start()
         
 
 chat_id = int(api_token.split(":")[0])
-bot = NewsBot(api_token)
+bot = NewsBot(api_token, int(update_interval))
 handler = MessageHandler()
 
 def rate_markup():
